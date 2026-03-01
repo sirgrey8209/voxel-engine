@@ -29,15 +29,15 @@ export class Engine {
   }
 
   async init(): Promise<void> {
-    // Set canvas size
-    this.resizeCanvas();
-    window.addEventListener('resize', this.resizeCanvas);
-
-    // Initialize renderer
+    // Initialize renderer first (creates depthTexture)
     const success = await this.renderer.init();
     if (!success) {
       throw new Error('Failed to initialize WebGPU renderer');
     }
+
+    // Then resize canvas (which calls renderer.resize())
+    this.resizeCanvas();
+    window.addEventListener('resize', this.resizeCanvas);
 
     // Generate test terrain
     this.chunk.fillGround(16);
@@ -81,29 +81,24 @@ export class Engine {
   private update(deltaTime: number): void {
     const state = this.input.getState();
 
-    // Right-click drag: Orbit
+    // WASD: Always move (no right-click required)
+    const moveDir = vec3.fromValues(
+      (state.right ? 1 : 0) - (state.left ? 1 : 0),
+      0,
+      (state.forward ? 1 : 0) - (state.backward ? 1 : 0)
+    );
+    if (vec3.length(moveDir) > 0) {
+      this.camera.move(moveDir, deltaTime);
+    }
+
+    // Right-click drag: Mouse look
     if (state.mouseRightDown) {
-      this.camera.orbit(state.mouseDeltaX, state.mouseDeltaY);
-
-      // Right-click + WASD: Fly-through
-      const moveDir = vec3.fromValues(
-        (state.right ? 1 : 0) - (state.left ? 1 : 0),
-        (state.up ? 1 : 0) - (state.down ? 1 : 0),
-        (state.forward ? 1 : 0) - (state.backward ? 1 : 0)
-      );
-      if (vec3.length(moveDir) > 0) {
-        this.camera.flyMove(moveDir, deltaTime);
-      }
+      this.camera.look(state.mouseDeltaX, state.mouseDeltaY);
     }
 
-    // Middle-click drag: Pan
-    if (state.mouseMiddleDown) {
-      this.camera.pan(state.mouseDeltaX, state.mouseDeltaY);
-    }
-
-    // Scroll: Zoom
-    if (state.scrollDelta !== 0) {
-      this.camera.zoom(state.scrollDelta * 0.01);
+    // Space: Reset camera
+    if (state.reset) {
+      this.camera.reset();
     }
 
     this.input.resetDeltas();
