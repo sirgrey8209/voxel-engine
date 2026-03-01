@@ -1,19 +1,16 @@
 // tests/rendering/Camera.test.ts
 import { describe, it, expect } from 'vitest';
+import { vec3 } from 'gl-matrix';
 import { Camera } from '../../src/rendering/Camera';
 
 describe('Camera', () => {
-  it('should create with default position', () => {
+  it('should create with default position looking at chunk center', () => {
     const camera = new Camera();
     const pos = camera.position;
-    // Initial position based on spherical coordinates:
-    // theta = PI/4, phi = PI/3, radius = 30, target = (16, 8, 16)
-    // x = 16 + 30 * sin(PI/3) * cos(PI/4) = 16 + 30 * 0.866 * 0.707 ≈ 34.37
-    // y = 8 + 30 * cos(PI/3) = 8 + 30 * 0.5 = 23
-    // z = 16 + 30 * sin(PI/3) * sin(PI/4) ≈ 34.37
-    expect(pos[0]).toBeCloseTo(34.37, 1);
-    expect(pos[1]).toBeCloseTo(23, 1);
-    expect(pos[2]).toBeCloseTo(34.37, 1);
+    // Initial position: (48, 24, 48)
+    expect(pos[0]).toBeCloseTo(48, 1);
+    expect(pos[1]).toBeCloseTo(24, 1);
+    expect(pos[2]).toBeCloseTo(48, 1);
   });
 
   it('should return view matrix', () => {
@@ -28,60 +25,87 @@ describe('Camera', () => {
     expect(proj.length).toBe(16);
   });
 
-  it('should orbit around target', () => {
+  it('should move forward with W key', () => {
     const camera = new Camera();
-    const initialPos = [...camera.position];
-    camera.orbit(0.1, 0);
-    expect(camera.position[0]).not.toBe(initialPos[0]);
+    const initialZ = camera.position[2];
+
+    // Move forward (negative Z in default orientation)
+    camera.move(vec3.fromValues(0, 0, 1), 1.0);
+
+    expect(camera.position[2]).not.toBe(initialZ);
   });
 
-  it('should zoom in and out', () => {
+  it('should strafe right with D key', () => {
     const camera = new Camera();
-    const initialDistance = camera.getDistanceToTarget();
-    camera.zoom(-1); // zoom in
-    expect(camera.getDistanceToTarget()).toBeLessThan(initialDistance);
+    const initialX = camera.position[0];
+
+    // Move right
+    camera.move(vec3.fromValues(1, 0, 0), 1.0);
+
+    expect(camera.position[0]).not.toBe(initialX);
   });
 
-  it('should pan the camera and target', () => {
+  it('should look left/right with yaw', () => {
     const camera = new Camera();
-    const initialTarget = [...camera.target];
-    camera.pan(0.1, 0.1);
-    expect(camera.target[0]).not.toBe(initialTarget[0]);
+    const view1 = camera.getViewMatrix();
+
+    camera.look(100, 0); // Look right
+
+    const view2 = camera.getViewMatrix();
+    expect(view2[0]).not.toBe(view1[0]);
   });
 
-  it('should clamp phi to prevent flipping', () => {
+  it('should look up/down with pitch', () => {
     const camera = new Camera();
-    // Orbit with large deltaY to try to flip
-    camera.orbit(0, 100);
-    const pos = camera.position;
-    // Camera should still be above or below target, not flipped
-    expect(pos[1]).toBeDefined();
+    const view1 = camera.getViewMatrix();
+
+    camera.look(0, 100); // Look down
+
+    const view2 = camera.getViewMatrix();
+    expect(view2[5]).not.toBe(view1[5]);
   });
 
-  it('should clamp zoom distance', () => {
+  it('should clamp pitch to prevent flipping', () => {
     const camera = new Camera();
-    // Try to zoom way out
-    camera.zoom(10000);
-    expect(camera.getDistanceToTarget()).toBeLessThanOrEqual(500);
 
-    // Try to zoom way in
-    camera.zoom(-10000);
-    expect(camera.getDistanceToTarget()).toBeGreaterThanOrEqual(1);
+    // Try to look way up
+    camera.look(0, -10000);
+    const view1 = camera.getViewMatrix();
+
+    // Try to look way down
+    camera.look(0, 20000);
+    const view2 = camera.getViewMatrix();
+
+    // Should still produce valid matrices
+    expect(view1.length).toBe(16);
+    expect(view2.length).toBe(16);
   });
 
-  it('should move camera and target with flyMove', () => {
+  it('should reset to initial position and orientation', () => {
     const camera = new Camera();
-    const initialPos = [...camera.position];
-    const initialTarget = [...camera.target];
+    const initialPos = vec3.clone(camera.position);
 
-    // Move forward (W key)
-    camera.flyMove([0, 0, 1] as unknown as import('gl-matrix').vec3, 0.1);
+    // Move and look around
+    camera.move(vec3.fromValues(1, 0, 1), 1.0);
+    camera.look(100, 50);
 
-    // Both position and target should have moved
-    const newPos = camera.position;
-    const newTarget = camera.target;
+    // Reset
+    camera.reset();
 
-    expect(newPos[0]).not.toBe(initialPos[0]);
-    expect(newTarget[0]).not.toBe(initialTarget[0]);
+    const resetPos = camera.position;
+    expect(resetPos[0]).toBeCloseTo(initialPos[0], 5);
+    expect(resetPos[1]).toBeCloseTo(initialPos[1], 5);
+    expect(resetPos[2]).toBeCloseTo(initialPos[2], 5);
+  });
+
+  it('should move on XZ plane only (no vertical drift)', () => {
+    const camera = new Camera();
+    const initialY = camera.position[1];
+
+    // Move forward and strafe
+    camera.move(vec3.fromValues(1, 0, 1), 1.0);
+
+    // Y should not change
+    expect(camera.position[1]).toBeCloseTo(initialY, 5);
   });
 });

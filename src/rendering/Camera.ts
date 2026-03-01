@@ -4,61 +4,85 @@ import { DEFAULT_CONFIG } from '../core/Config';
 
 export class Camera {
   private _position: vec3;
-  private _target: vec3;
   private _up: vec3;
+
+  private yaw: number;    // Horizontal rotation (radians)
+  private pitch: number;  // Vertical rotation (radians)
 
   private fov: number;
   private near: number;
   private far: number;
-
-  private rotateSpeed: number;
-  private panSpeed: number;
-  private zoomSpeed: number;
   private moveSpeed: number;
+  private lookSpeed: number;
 
-  // Spherical coordinates for orbit
-  private theta: number = Math.PI / 4;  // Horizontal angle
-  private phi: number = Math.PI / 3;    // Vertical angle
-  private radius: number = 30;          // Distance from target
+  // For reset
+  private initialPosition: vec3;
+  private initialYaw: number;
+  private initialPitch: number;
 
   constructor() {
     const config = DEFAULT_CONFIG.camera;
     this.fov = config.fov * (Math.PI / 180);
     this.near = config.near;
     this.far = config.far;
-    this.rotateSpeed = config.rotateSpeed;
-    this.panSpeed = config.panSpeed;
-    this.zoomSpeed = config.zoomSpeed;
     this.moveSpeed = config.moveSpeed;
+    this.lookSpeed = config.lookSpeed;
 
-    this._target = vec3.fromValues(16, 8, 16); // Chunk center
     this._up = vec3.fromValues(0, 1, 0);
-    this._position = vec3.create();
-    this.updatePosition();
+
+    // Initial position: outside chunk, looking at center
+    this._position = vec3.fromValues(48, 24, 48);
+
+    // Initial orientation: looking at chunk center (16, 8, 16)
+    // Direction: (16-48, 8-24, 16-48) = (-32, -16, -32)
+    // yaw = atan2(-32, -32) = atan2(1, 1) = -3π/4 (225°)
+    this.yaw = -Math.PI * 3 / 4;
+    // pitch = atan2(-16, sqrt(32² + 32²)) = atan2(-16, 45.25) ≈ -0.34 rad (-19.5°)
+    this.pitch = -0.34;
+
+    // Save initial state for reset
+    this.initialPosition = vec3.clone(this._position);
+    this.initialYaw = this.yaw;
+    this.initialPitch = this.pitch;
   }
 
   get position(): vec3 {
     return vec3.clone(this._position);
   }
 
-  get target(): vec3 {
-    return vec3.clone(this._target);
+  private getForward(): vec3 {
+    // Forward vector from yaw/pitch (ignoring pitch for movement)
+    return vec3.fromValues(
+      Math.sin(this.yaw),
+      0,
+      Math.cos(this.yaw)
+    );
   }
 
-  getDistanceToTarget(): number {
-    return this.radius;
+  private getRight(): vec3 {
+    // Right vector (perpendicular to forward on XZ plane)
+    return vec3.fromValues(
+      Math.sin(this.yaw + Math.PI / 2),
+      0,
+      Math.cos(this.yaw + Math.PI / 2)
+    );
   }
 
-  private updatePosition(): void {
-    // Spherical to Cartesian coordinates
-    this._position[0] = this._target[0] + this.radius * Math.sin(this.phi) * Math.cos(this.theta);
-    this._position[1] = this._target[1] + this.radius * Math.cos(this.phi);
-    this._position[2] = this._target[2] + this.radius * Math.sin(this.phi) * Math.sin(this.theta);
+  private getLookDirection(): vec3 {
+    // Actual look direction including pitch
+    return vec3.fromValues(
+      Math.cos(this.pitch) * Math.sin(this.yaw),
+      Math.sin(this.pitch),
+      Math.cos(this.pitch) * Math.cos(this.yaw)
+    );
   }
 
   getViewMatrix(): mat4 {
     const view = mat4.create();
-    mat4.lookAt(view, this._position, this._target, this._up);
+    const target = vec3.create();
+    const lookDir = this.getLookDirection();
+    vec3.add(target, this._position, lookDir);
+    mat4.lookAt(view, this._position, target, this._up);
     return view;
   }
 
@@ -68,76 +92,39 @@ export class Camera {
     return proj;
   }
 
-  // Unity Scene View style controls
+  // WASD movement (always on XZ plane)
+  move(direction: vec3, deltaTime: number): void {
+    const forward = this.getForward();
+    const right = this.getRight();
 
-  // Right-click drag: Orbit
-  orbit(deltaX: number, deltaY: number): void {
-    this.theta -= deltaX * this.rotateSpeed;
-    this.phi -= deltaY * this.rotateSpeed;
-
-    // Clamp phi to prevent flipping
-    this.phi = Math.max(0.1, Math.min(Math.PI - 0.1, this.phi));
-
-    this.updatePosition();
-  }
-
-  // Middle-click drag: Pan
-  pan(deltaX: number, deltaY: number): void {
-    // Calculate camera local axes
-    const forward = vec3.create();
-    vec3.sub(forward, this._target, this._position);
-    vec3.normalize(forward, forward);
-
-    const right = vec3.create();
-    vec3.cross(right, forward, this._up);
-    vec3.normalize(right, right);
-
-    const up = vec3.create();
-    vec3.cross(up, right, forward);
-
-    // Pan movement
-    const panX = deltaX * this.panSpeed * this.radius;
-    const panY = deltaY * this.panSpeed * this.radius;
-
-    vec3.scaleAndAdd(this._target, this._target, right, -panX);
-    vec3.scaleAndAdd(this._target, this._target, up, panY);
-
-    this.updatePosition();
-  }
-
-  // Scroll: Zoom
-  zoom(delta: number): void {
-    this.radius += delta * this.zoomSpeed;
-    this.radius = Math.max(1, Math.min(500, this.radius));
-    this.updatePosition();
-  }
-
-  // WASD + Right-click: Fly-through
-  flyMove(direction: vec3, deltaTime: number): void {
-    // Calculate camera local axes
-    const forward = vec3.create();
-    vec3.sub(forward, this._target, this._position);
-    vec3.normalize(forward, forward);
-
-    const right = vec3.create();
-    vec3.cross(right, forward, this._up);
-    vec3.normalize(right, right);
-
-    // Calculate movement vector
     const move = vec3.create();
-    vec3.scaleAndAdd(move, move, forward, direction[2]);  // W/S
-    vec3.scaleAndAdd(move, move, right, direction[0]);    // A/D
-    vec3.scaleAndAdd(move, move, this._up, direction[1]); // Q/E
+    // Z component = forward/backward (W/S)
+    vec3.scaleAndAdd(move, move, forward, direction[2]);
+    // X component = strafe (A/D)
+    vec3.scaleAndAdd(move, move, right, direction[0]);
 
-    // Guard against zero-vector normalization (prevents NaN)
     const moveLength = vec3.length(move);
     if (moveLength < 0.0001) return;
 
     vec3.normalize(move, move);
     vec3.scale(move, move, this.moveSpeed * deltaTime);
-
-    // Move both camera and target
     vec3.add(this._position, this._position, move);
-    vec3.add(this._target, this._target, move);
+  }
+
+  // Right-click mouse look
+  look(deltaX: number, deltaY: number): void {
+    this.yaw -= deltaX * this.lookSpeed;
+    this.pitch -= deltaY * this.lookSpeed;
+
+    // Clamp pitch to prevent flipping (±89°)
+    const maxPitch = Math.PI / 2 - 0.01;
+    this.pitch = Math.max(-maxPitch, Math.min(maxPitch, this.pitch));
+  }
+
+  // Space: reset to initial position
+  reset(): void {
+    vec3.copy(this._position, this.initialPosition);
+    this.yaw = this.initialYaw;
+    this.pitch = this.initialPitch;
   }
 }
