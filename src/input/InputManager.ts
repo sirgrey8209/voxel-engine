@@ -1,12 +1,13 @@
 // src/input/InputManager.ts
 export interface InputState {
-  // Movement
+  // Movement (WASD only, no up/down)
   forward: boolean;
   backward: boolean;
   left: boolean;
   right: boolean;
-  up: boolean;
-  down: boolean;
+
+  // Reset
+  reset: boolean;
 
   // Mouse buttons
   mouseLeftDown: boolean;
@@ -19,7 +20,7 @@ export interface InputState {
   mouseDeltaX: number;
   mouseDeltaY: number;
 
-  // Scroll
+  // Scroll (keeping for potential future use)
   scrollDelta: number;
 }
 
@@ -39,8 +40,7 @@ export class InputManager {
       backward: false,
       left: false,
       right: false,
-      up: false,
-      down: false,
+      reset: false,
       mouseLeftDown: false,
       mouseRightDown: false,
       mouseMiddleDown: false,
@@ -81,8 +81,7 @@ export class InputManager {
       case 'KeyS': this.state.backward = pressed; break;
       case 'KeyA': this.state.left = pressed; break;
       case 'KeyD': this.state.right = pressed; break;
-      case 'KeyQ': this.state.down = pressed; break;
-      case 'KeyE': this.state.up = pressed; break;
+      case 'Space': this.state.reset = pressed; break;
     }
   }
 
