@@ -128,13 +128,13 @@ export class WebGPURenderer {
       size: mesh.vertices.byteLength,
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     });
-    this.device.queue.writeBuffer(vertexBuffer, 0, mesh.vertices);
+    this.device.queue.writeBuffer(vertexBuffer, 0, mesh.vertices.buffer);
 
     const indexBuffer = this.device.createBuffer({
       size: mesh.indices.byteLength,
       usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
     });
-    this.device.queue.writeBuffer(indexBuffer, 0, mesh.indices);
+    this.device.queue.writeBuffer(indexBuffer, 0, mesh.indices.buffer);
 
     this.meshHandle = {
       vertexBuffer,
