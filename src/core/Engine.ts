@@ -3,8 +3,7 @@ import { vec3 } from 'gl-matrix';
 import { Camera } from '../rendering/Camera';
 import { WebGPURenderer } from '../rendering/WebGPURenderer';
 import { InputManager } from '../input/InputManager';
-import { Chunk } from '../voxel/Chunk';
-import { GreedyMesher } from '../meshing/GreedyMesher';
+import { ChunkManager } from '../voxel/ChunkManager';
 
 export interface EngineConfig {
   canvas: HTMLCanvasElement;
@@ -15,7 +14,7 @@ export class Engine {
   private renderer: WebGPURenderer;
   private camera: Camera;
   private input: InputManager;
-  private chunk: Chunk;
+  private chunkManager: ChunkManager;
 
   private running: boolean = false;
   private lastTime: number = 0;
@@ -25,29 +24,36 @@ export class Engine {
     this.renderer = new WebGPURenderer(this.canvas);
     this.camera = new Camera();
     this.input = new InputManager(this.canvas);
-    this.chunk = new Chunk(0, 0, 0);
+    this.chunkManager = new ChunkManager();
   }
 
   async init(): Promise<void> {
-    // Initialize renderer first (creates depthTexture)
     const success = await this.renderer.init();
     if (!success) {
       throw new Error('Failed to initialize WebGPU renderer');
     }
 
-    // Then resize canvas (which calls renderer.resize())
     this.resizeCanvas();
     window.addEventListener('resize', this.resizeCanvas);
 
-    // Generate test terrain
-    this.chunk.fillGround(16);
+    // Load initial chunks (3x3 grid around origin for testing)
+    const loadPromises: Promise<void>[] = [];
+    for (let z = -1; z <= 1; z++) {
+      for (let x = -1; x <= 1; x++) {
+        loadPromises.push(this.loadAndUploadChunk(x, 0, z));
+      }
+    }
+    await Promise.all(loadPromises);
 
-    // Generate and upload mesh using GreedyMesher
-    const mesh = GreedyMesher.generateMesh(this.chunk);
-    const chunkKey = `${this.chunk.x},${this.chunk.y},${this.chunk.z}`;
-    this.renderer.uploadMesh(chunkKey, mesh);
+    console.log(`Loaded ${this.chunkManager.getLoadedChunks().length} chunks`);
+  }
 
-    console.log(`GreedyMesh generated: ${mesh.vertexCount} vertices, ${mesh.indexCount} indices`);
+  private async loadAndUploadChunk(cx: number, cy: number, cz: number): Promise<void> {
+    const loaded = await this.chunkManager.loadChunk(cx, cy, cz);
+    if (loaded.mesh) {
+      const key = ChunkManager.getChunkKey(cx, cy, cz);
+      loaded.gpuHandle = this.renderer.uploadMesh(key, loaded.mesh);
+    }
   }
 
   private resizeCanvas = (): void => {
@@ -82,7 +88,6 @@ export class Engine {
   private update(deltaTime: number): void {
     const state = this.input.getState();
 
-    // WASD: Always move (no right-click required)
     const moveDir = vec3.fromValues(
       (state.right ? 1 : 0) - (state.left ? 1 : 0),
       0,
@@ -92,12 +97,10 @@ export class Engine {
       this.camera.move(moveDir, deltaTime);
     }
 
-    // Right-click drag: Mouse look
     if (state.mouseRightDown) {
       this.camera.look(state.mouseDeltaX, state.mouseDeltaY);
     }
 
-    // Space: Reset camera
     if (state.reset) {
       this.camera.reset();
     }
@@ -113,6 +116,7 @@ export class Engine {
     this.stop();
     window.removeEventListener('resize', this.resizeCanvas);
     this.input.dispose();
+    this.chunkManager.dispose();
     this.renderer.dispose();
   }
 }
