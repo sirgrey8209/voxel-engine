@@ -93,7 +93,7 @@ export class ChunkManager {
   async updateChunks(
     cameraX: number,
     cameraZ: number,
-    onChunkLoaded?: (key: string, mesh: ChunkMesh) => void,
+    onChunkLoaded?: (key: string, mesh: ChunkMesh) => GPUMeshHandle | null | undefined,
     onChunkUnloaded?: (key: string) => void
   ): Promise<void> {
     const renderDistance = 3; // chunks in each direction
@@ -135,7 +135,7 @@ export class ChunkManager {
         loadPromises.push(
           this.loadChunk(x, y, z).then(loaded => {
             if (loaded.mesh && onChunkLoaded) {
-              onChunkLoaded(key, loaded.mesh);
+              loaded.gpuHandle = onChunkLoaded(key, loaded.mesh) ?? null;
             }
           })
         );
