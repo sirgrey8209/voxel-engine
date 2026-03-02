@@ -44,7 +44,8 @@ export class Engine {
 
     // Generate and upload mesh using GreedyMesher
     const mesh = GreedyMesher.generateMesh(this.chunk);
-    this.renderer.uploadMesh(mesh);
+    const chunkKey = `${this.chunk.x},${this.chunk.y},${this.chunk.z}`;
+    this.renderer.uploadMesh(chunkKey, mesh);
 
     console.log(`GreedyMesh generated: ${mesh.vertexCount} vertices, ${mesh.indexCount} indices`);
   }

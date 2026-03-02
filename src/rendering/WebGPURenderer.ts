@@ -20,7 +20,7 @@ export class WebGPURenderer {
   private depthTextureView!: GPUTextureView;
 
   private canvas: HTMLCanvasElement;
-  private meshHandle: GPUMeshHandle | null = null;
+  private meshHandles: Map<string, GPUMeshHandle> = new Map();
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -123,7 +123,14 @@ export class WebGPURenderer {
     this.createDepthTexture();
   }
 
-  uploadMesh(mesh: ChunkMesh): GPUMeshHandle {
+  uploadMesh(key: string, mesh: ChunkMesh): GPUMeshHandle {
+    // Delete old handle if exists
+    const oldHandle = this.meshHandles.get(key);
+    if (oldHandle) {
+      oldHandle.vertexBuffer.destroy();
+      oldHandle.indexBuffer.destroy();
+    }
+
     const vertexBuffer = this.device.createBuffer({
       size: mesh.vertices.byteLength,
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
@@ -136,19 +143,27 @@ export class WebGPURenderer {
     });
     this.device.queue.writeBuffer(indexBuffer, 0, mesh.indices.buffer);
 
-    this.meshHandle = {
+    const handle: GPUMeshHandle = {
       vertexBuffer,
       indexBuffer,
       indexCount: mesh.indexCount,
     };
 
-    return this.meshHandle;
+    this.meshHandles.set(key, handle);
+    return handle;
+  }
+
+  deleteMesh(key: string): void {
+    const handle = this.meshHandles.get(key);
+    if (handle) {
+      handle.vertexBuffer.destroy();
+      handle.indexBuffer.destroy();
+      this.meshHandles.delete(key);
+    }
   }
 
   render(camera: Camera): void {
-    if (!this.meshHandle || this.meshHandle.indexCount === 0) {
-      return;
-    }
+    if (this.meshHandles.size === 0) return;
 
     // Update uniforms
     const view = camera.getViewMatrix();
@@ -162,7 +177,7 @@ export class WebGPURenderer {
 
     this.device.queue.writeBuffer(this.uniformBuffer, 0, uniformData);
 
-    // Render
+    // Create render pass
     const commandEncoder = this.device.createCommandEncoder();
     const textureView = this.context.getCurrentTexture().createView();
 
@@ -183,19 +198,26 @@ export class WebGPURenderer {
 
     renderPass.setPipeline(this.pipeline);
     renderPass.setBindGroup(0, this.uniformBindGroup);
-    renderPass.setVertexBuffer(0, this.meshHandle.vertexBuffer);
-    renderPass.setIndexBuffer(this.meshHandle.indexBuffer, 'uint32');
-    renderPass.drawIndexed(this.meshHandle.indexCount);
-    renderPass.end();
 
+    // Draw ALL chunks
+    for (const handle of this.meshHandles.values()) {
+      if (handle.indexCount > 0) {
+        renderPass.setVertexBuffer(0, handle.vertexBuffer);
+        renderPass.setIndexBuffer(handle.indexBuffer, 'uint32');
+        renderPass.drawIndexed(handle.indexCount);
+      }
+    }
+
+    renderPass.end();
     this.device.queue.submit([commandEncoder.finish()]);
   }
 
   dispose(): void {
-    if (this.meshHandle) {
-      this.meshHandle.vertexBuffer.destroy();
-      this.meshHandle.indexBuffer.destroy();
+    for (const handle of this.meshHandles.values()) {
+      handle.vertexBuffer.destroy();
+      handle.indexBuffer.destroy();
     }
+    this.meshHandles.clear();
     this.uniformBuffer.destroy();
     this.depthTexture.destroy();
   }
