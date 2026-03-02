@@ -4,7 +4,7 @@ import { Camera } from '../rendering/Camera';
 import { WebGPURenderer } from '../rendering/WebGPURenderer';
 import { InputManager } from '../input/InputManager';
 import { Chunk } from '../voxel/Chunk';
-import { NaiveMesher } from '../voxel/NaiveMesher';
+import { GreedyMesher } from '../meshing/GreedyMesher';
 
 export interface EngineConfig {
   canvas: HTMLCanvasElement;
@@ -42,11 +42,11 @@ export class Engine {
     // Generate test terrain
     this.chunk.fillGround(16);
 
-    // Generate and upload mesh
-    const mesh = NaiveMesher.generateMesh(this.chunk);
+    // Generate and upload mesh using GreedyMesher
+    const mesh = GreedyMesher.generateMesh(this.chunk);
     this.renderer.uploadMesh(mesh);
 
-    console.log(`Mesh generated: ${mesh.vertexCount} vertices, ${mesh.indexCount} indices`);
+    console.log(`GreedyMesh generated: ${mesh.vertexCount} vertices, ${mesh.indexCount} indices`);
   }
 
   private resizeCanvas = (): void => {
