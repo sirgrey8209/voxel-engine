@@ -1,7 +1,7 @@
 // src/rendering/WebGPURenderer.ts
 import { mat4 } from 'gl-matrix';
 import { Camera } from './Camera';
-import { ChunkMesh } from '../voxel/NaiveMesher';
+import { ChunkMesh } from '../meshing/types';
 import shaderSource from './shaders/voxel.wgsl?raw';
 
 export interface GPUMeshHandle {

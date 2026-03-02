@@ -1,14 +1,9 @@
 // src/voxel/NaiveMesher.ts
 import { Chunk, CHUNK_SIZE } from './Chunk';
-import { VoxelType, VOXEL_COLORS, isSolid, Color3 } from './VoxelData';
+import { VoxelType, VOXEL_COLORS, isSolid } from './VoxelData';
+import { ChunkMesh } from '../meshing/types';
 
-export interface ChunkMesh {
-  // position(3) + normal(3) + color(3) = 9 floats per vertex
-  vertices: Float32Array;
-  indices: Uint32Array;
-  vertexCount: number;
-  indexCount: number;
-}
+export { ChunkMesh };
 
 // Face 방향 정의
 const FACES = [

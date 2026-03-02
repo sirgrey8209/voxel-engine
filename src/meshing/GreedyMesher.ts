@@ -1,7 +1,7 @@
 // src/meshing/GreedyMesher.ts
 import { Chunk, CHUNK_SIZE } from '../voxel/Chunk';
 import { VoxelType, VOXEL_COLORS, isSolid } from '../voxel/VoxelData';
-import { ChunkMesh } from '../voxel/NaiveMesher';
+import { ChunkMesh } from './types';
 
 // Face directions with axis info for greedy meshing
 // d: axis perpendicular to face (0=X, 1=Y, 2=Z)
