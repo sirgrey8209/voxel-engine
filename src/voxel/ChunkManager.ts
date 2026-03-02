@@ -1,5 +1,5 @@
 // src/voxel/ChunkManager.ts
-import { Chunk } from './Chunk';
+import { Chunk, CHUNK_SIZE } from './Chunk';
 import { ChunkMesh } from '../meshing/types';
 import { MeshWorkerPool } from '../workers/MeshWorkerPool';
 import { GPUMeshHandle } from '../rendering/WebGPURenderer';
@@ -87,5 +87,60 @@ export class ChunkManager {
     }
     this.chunks.clear();
     this.meshWorkerPool.terminate();
+  }
+
+  // Update chunks based on camera position
+  async updateChunks(
+    cameraX: number,
+    cameraZ: number,
+    onChunkLoaded?: (key: string, mesh: ChunkMesh) => void,
+    onChunkUnloaded?: (key: string) => void
+  ): Promise<void> {
+    const renderDistance = 3; // chunks in each direction
+
+    // Calculate camera chunk position
+    const camChunkX = Math.floor(cameraX / CHUNK_SIZE);
+    const camChunkZ = Math.floor(cameraZ / CHUNK_SIZE);
+
+    // Determine which chunks should be loaded
+    const shouldBeLoaded = new Set<string>();
+    for (let z = camChunkZ - renderDistance; z <= camChunkZ + renderDistance; z++) {
+      for (let x = camChunkX - renderDistance; x <= camChunkX + renderDistance; x++) {
+        const dx = x - camChunkX;
+        const dz = z - camChunkZ;
+        if (dx * dx + dz * dz <= renderDistance * renderDistance) {
+          shouldBeLoaded.add(ChunkManager.getChunkKey(x, 0, z));
+        }
+      }
+    }
+
+    // Unload chunks that are too far
+    const toUnload: string[] = [];
+    for (const [key] of this.chunks) {
+      if (!shouldBeLoaded.has(key)) {
+        toUnload.push(key);
+      }
+    }
+    for (const key of toUnload) {
+      const [x, y, z] = key.split(',').map(Number);
+      if (onChunkUnloaded) onChunkUnloaded(key);
+      this.unloadChunk(x, y, z);
+    }
+
+    // Load new chunks
+    const loadPromises: Promise<void>[] = [];
+    for (const key of shouldBeLoaded) {
+      if (!this.chunks.has(key)) {
+        const [x, y, z] = key.split(',').map(Number);
+        loadPromises.push(
+          this.loadChunk(x, y, z).then(loaded => {
+            if (loaded.mesh && onChunkLoaded) {
+              onChunkLoaded(key, loaded.mesh);
+            }
+          })
+        );
+      }
+    }
+    await Promise.all(loadPromises);
   }
 }

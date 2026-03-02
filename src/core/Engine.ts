@@ -18,6 +18,8 @@ export class Engine {
 
   private running: boolean = false;
   private lastTime: number = 0;
+  private lastStreamUpdate: number = 0;
+  private streamUpdateInterval: number = 500; // ms
 
   constructor(config: EngineConfig) {
     this.canvas = config.canvas;
@@ -106,6 +108,18 @@ export class Engine {
     }
 
     this.input.resetDeltas();
+
+    // Update chunk streaming periodically
+    const now = performance.now();
+    if (now - this.lastStreamUpdate > this.streamUpdateInterval) {
+      this.lastStreamUpdate = now;
+      const pos = this.camera.position;
+      this.chunkManager.updateChunks(
+        pos[0], pos[2],
+        (key, mesh) => this.renderer.uploadMesh(key, mesh),
+        (key) => this.renderer.deleteMesh(key)
+      );
+    }
   }
 
   private render(): void {
