@@ -139,18 +139,19 @@ export class GreedyMesher {
             }
 
             // Add indices for two triangles
-            // Winding order depends on face direction
+            // WebGPU default frontFace is CCW, cullMode is 'back'
+            // So front-facing triangles need CCW winding
             if (face.backface) {
-              // Counter-clockwise for backface
-              indices.push(
-                vertexIndex, vertexIndex + 3, vertexIndex + 2,
-                vertexIndex, vertexIndex + 2, vertexIndex + 1
-              );
-            } else {
-              // Clockwise for front face
+              // Backface (-X, -Y, -Z): CW winding (will be back-facing, but visible from inside)
               indices.push(
                 vertexIndex, vertexIndex + 1, vertexIndex + 2,
                 vertexIndex, vertexIndex + 2, vertexIndex + 3
+              );
+            } else {
+              // Front face (+X, +Y, +Z): CCW winding (front-facing)
+              indices.push(
+                vertexIndex, vertexIndex + 3, vertexIndex + 2,
+                vertexIndex, vertexIndex + 2, vertexIndex + 1
               );
             }
             vertexIndex += 4;

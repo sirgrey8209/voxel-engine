@@ -98,14 +98,15 @@ describe('Camera', () => {
     expect(resetPos[2]).toBeCloseTo(initialPos[2], 5);
   });
 
-  it('should move on XZ plane only (no vertical drift)', () => {
+  it('should move in 3D direction based on pitch', () => {
     const camera = new Camera();
     const initialY = camera.position[1];
 
-    // Move forward and strafe
-    camera.move(vec3.fromValues(1, 0, 1), 1.0);
+    // Look down and move forward - Y should decrease
+    camera.look(0, 100); // pitch down
+    camera.move(vec3.fromValues(0, 0, 1), 1.0);
 
-    // Y should not change
-    expect(camera.position[1]).toBeCloseTo(initialY, 5);
+    // Y should change when moving with pitch
+    expect(camera.position[1]).not.toBeCloseTo(initialY, 1);
   });
 });

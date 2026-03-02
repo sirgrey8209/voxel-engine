@@ -51,25 +51,7 @@ export class Camera {
   }
 
   private getForward(): vec3 {
-    // Forward vector from yaw/pitch (ignoring pitch for movement)
-    return vec3.fromValues(
-      Math.sin(this.yaw),
-      0,
-      Math.cos(this.yaw)
-    );
-  }
-
-  private getRight(): vec3 {
-    // Right vector (perpendicular to forward on XZ plane)
-    return vec3.fromValues(
-      Math.sin(this.yaw + Math.PI / 2),
-      0,
-      Math.cos(this.yaw + Math.PI / 2)
-    );
-  }
-
-  private getLookDirection(): vec3 {
-    // Actual look direction including pitch
+    // Forward vector from yaw/pitch (full 3D direction)
     return vec3.fromValues(
       Math.cos(this.pitch) * Math.sin(this.yaw),
       Math.sin(this.pitch),
@@ -77,10 +59,19 @@ export class Camera {
     );
   }
 
+  private getRight(): vec3 {
+    // Right vector (perpendicular to forward on XZ plane, always horizontal)
+    return vec3.fromValues(
+      Math.sin(this.yaw - Math.PI / 2),
+      0,
+      Math.cos(this.yaw - Math.PI / 2)
+    );
+  }
+
   getViewMatrix(): mat4 {
     const view = mat4.create();
     const target = vec3.create();
-    const lookDir = this.getLookDirection();
+    const lookDir = this.getForward();
     vec3.add(target, this._position, lookDir);
     mat4.lookAt(view, this._position, target, this._up);
     return view;
@@ -92,15 +83,15 @@ export class Camera {
     return proj;
   }
 
-  // WASD movement (always on XZ plane)
+  // WASD movement (3D direction based on where camera is looking)
   move(direction: vec3, deltaTime: number): void {
-    const forward = this.getForward();
-    const right = this.getRight();
+    const forward = this.getForward();  // Full 3D forward direction
+    const right = this.getRight();      // Horizontal strafe direction
 
     const move = vec3.create();
-    // Z component = forward/backward (W/S)
+    // Z component = forward/backward (W/S) - moves in 3D look direction
     vec3.scaleAndAdd(move, move, forward, direction[2]);
-    // X component = strafe (A/D)
+    // X component = strafe (A/D) - always horizontal
     vec3.scaleAndAdd(move, move, right, direction[0]);
 
     const moveLength = vec3.length(move);
